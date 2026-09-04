@@ -1,23 +1,23 @@
-import React, { StrictMode } from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import { ChakraProvider } from "@chakra-ui/react";
 
 import App from "./App.jsx";
-import "./index.css";
-import { BrowserRouter } from "react-router-dom";
 import ChatProvider from "./Context/ChatProvider.jsx";
 import ErrorBoundary from "./Errorboundary.jsx";
+import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ChatProvider>
-        <ChakraProvider>
+    <ChakraProvider>
+      <BrowserRouter>
+        <ChatProvider>
           <ErrorBoundary>
             <App />
           </ErrorBoundary>
-        </ChakraProvider>
-      </ChatProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+        </ChatProvider>
+      </BrowserRouter>
+    </ChakraProvider>
+  </React.StrictMode>,
 );

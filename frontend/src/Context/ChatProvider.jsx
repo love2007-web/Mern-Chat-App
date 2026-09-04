@@ -1,33 +1,51 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
-const chatContext = createContext();
+const ChatContext = createContext();
 
 const ChatProvider = ({ children }) => {
-  const [user, setuser] = useState("");
-  const [selectedChat, setselectedChat] = useState("")
-  const [notification, setnotification] = useState([]);
-  const [chats, setchats] = useState([])
-  const navigate = useNavigate();
+  // Lazy initialize user state to avoid null flash on reload
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("userInfo");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
 
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [notification, setNotification] = useState([]);
+  const [chats, setChats] = useState([]);
+
+  // Sync state if localStorage changes across tabs
   useEffect(() => {
-   const userInfo = JSON.parse(localStorage.getItem("userInfo"));
-   setuser(userInfo);
+    const handleStorageChange = () => {
+      const savedUser = localStorage.getItem("userInfo");
+      setUser(savedUser ? JSON.parse(savedUser) : null);
+    };
 
-   if (!userInfo){
-        navigate("/");
-   }
-  }, [navigate])
-  
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   return (
-    <chatContext.Provider value={{ user, setuser, selectedChat, setselectedChat,  chats, setchats, notification, setnotification }}>
+    <ChatContext.Provider
+      value={{
+        user,
+        setUser,
+        selectedChat,
+        setSelectedChat,
+        chats,
+        setChats,
+        notification,
+        setNotification,
+      }}
+    >
       {children}
-    </chatContext.Provider>
+    </ChatContext.Provider>
   );
 };
 
-export const chatState = () => {
-  return useContext(chatContext);
-};
+export const chatState = () => useContext(ChatContext);
 
 export default ChatProvider;
