@@ -1,7 +1,10 @@
+import React, { useState } from "react";
 import {
   Button,
   FormControl,
+  FormErrorMessage,
   FormLabel,
+  Input,
   InputGroup,
   InputRightElement,
   VStack,
@@ -9,121 +12,149 @@ import {
 } from "@chakra-ui/react";
 import { useFormik } from "formik";
 import * as yup from "yup";
-import { Input } from "@chakra-ui/react";
-import {useNavigate} from 'react-router-dom'
-import axios from "axios";
-import React from "react";
-import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { chatState } from "../../Context/ChatProvider";
+import api from "../../config/api";
 import Loader from "../Loader";
+
 const Login = () => {
-  const [isLoading, setisLoading] = useState(false)
-    const [show, setshow] = useState(false);
-    const handleClick = () => setshow(!show);
-    const Toast = useToast();
-    const navigate = useNavigate();
-     const onSubmit = (values) => {
-       setisLoading(true);
-       const data = {
-         email: values.email,
-         password: values.password,
-       };
-       axios
-         .post("https://chat-app-blpr.onrender.com/users/login", data)
-         .then((res) => {
-           console.log(res);
-           Toast({
-             title: res.data.message,
-             status: "success",
-             duration: 5000,
-             isClosable: true,
-             posiition: "bottom",
-           });
-           localStorage.setItem("userInfo", JSON.stringify(res.data));
-           navigate("/dashboard");
-         })
-         .catch((error) => {
-           console.log(error);
-           Toast({
-             title: error.response.data.message,
-             status: "error",
-             duration: 5000,
-             isClosable: true,
-             posiition: "bottom",
-           });
-         })
-         .finally(() => {
-           setisLoading(false);
-         });
-     };
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-     const emailValidate =
-       /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
+  const { setUser } = chatState();
+  const toast = useToast();
+  const navigate = useNavigate();
 
-     const { handleSubmit, handleChange, errors, touched, handleBlur, values } =
-       useFormik({
-         initialValues: {
-           email: "",
-           password: "",
-         },
-         validationSchema: yup.object().shape({
-           email: yup
-             .string()
-             .matches(emailValidate, "Must be a valid email")
-             .required("Email field is required"),
-           password: yup
-             .string()
-             .required("Password field cannot be empty")
-             .min(6, "Password cannot be less than 6 characters"),
-         }),
-         onSubmit,
-       });
+  const formik = useFormik({
+    initialValues: {
+      email: "",
+      password: "",
+    },
+    validationSchema: yup.object({
+      email: yup
+        .string()
+        .email("Must be a valid email address")
+        .required("Email is required"),
+      password: yup
+        .string()
+        .min(6, "Password must be at least 6 characters")
+        .required("Password is required"),
+    }),
+    onSubmit: async (values) => {
+      setIsLoading(true);
+
+      try {
+        const { data } = await api.post("/users/login", {
+          email: values.email,
+          password: values.password,
+        });
+
+        toast({
+          title: "Login Successful",
+          description: data.message || "Welcome back!",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+          position: "bottom",
+        });
+
+        // 1. Save to localStorage
+        localStorage.setItem("userInfo", JSON.stringify(data));
+
+        // 2. Sync to Context State
+        if (setUser) setUser(data);
+
+        // 3. Navigate to chat dashboard
+        navigate("/dashboard", { replace: true });
+      } catch (error) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "An unexpected error occurred. Please try again.";
+
+        toast({
+          title: "Login Failed",
+          description: errorMessage,
+          status: "error",
+          duration: 4000,
+          isClosable: true,
+          position: "bottom",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    },
+  });
+
   return (
     <>
-    {isLoading ? <Loader/> : null}
-      <VStack spacing={"5px"}>
-        <FormControl id="email" isRequired>
-          <FormLabel>Email</FormLabel>
-          <Input
-            name="email"
-            value={values.email}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            type="email"
-            placeholder="Enter Your Email"
-          />
-          {touched.email && errors.email && (
-            <small className="text-red-600 font-black">{errors.email}</small>
-          )}
-        </FormControl>
+      {isLoading && <Loader />}
 
-        <FormControl id="password" isRequired>
-          <FormLabel>Password</FormLabel>
-          <InputGroup size={"md"}>
+      <form onSubmit={formik.handleSubmit}>
+        <VStack spacing={4} align="stretch">
+          {/* Email Field */}
+          <FormControl
+            id="login-email"
+            isRequired
+            isInvalid={formik.touched.email && Boolean(formik.errors.email)}
+          >
+            <FormLabel>Email</FormLabel>
             <Input
-              value={values.password}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              type={show ? "text" : "password"}
-              name="password"
-              placeholder="Enter Your Password"
+              name="email"
+              type="email"
+              placeholder="Enter your email"
+              value={formik.values.email}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
             />
-            <InputRightElement width="4.5rem">
-              <Button h="1.75rem" size="sm" onClick={handleClick}>
-                {show ? "Hide" : "Show"}
-              </Button>
-            </InputRightElement>
-          </InputGroup>
-        </FormControl>
+            <FormErrorMessage>{formik.errors.email}</FormErrorMessage>
+          </FormControl>
 
-        <Button
-          colorScheme="orange"
-          width={"100%"}
-          style={{ marginTop: 15 }}
-          onClick={handleSubmit}
-        >
-          Login
-        </Button>
-      </VStack>
+          {/* Password Field */}
+          <FormControl
+            id="login-password"
+            isRequired
+            isInvalid={
+              formik.touched.password && Boolean(formik.errors.password)
+            }
+          >
+            <FormLabel>Password</FormLabel>
+            <InputGroup size="md">
+              <Input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={formik.values.password}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+              />
+              <InputRightElement width="4.5rem">
+                <Button
+                  h="1.75rem"
+                  size="sm"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </Button>
+              </InputRightElement>
+            </InputGroup>
+            <FormErrorMessage>{formik.errors.password}</FormErrorMessage>
+          </FormControl>
+
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            colorScheme="teal"
+            width="100%"
+            mt={2}
+            isLoading={isLoading}
+            loadingText="Logging in..."
+          >
+            Login
+          </Button>
+        </VStack>
+      </form>
     </>
   );
 };
