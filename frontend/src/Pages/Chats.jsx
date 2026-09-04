@@ -8,6 +8,9 @@ import SideDrawer from "../components/Sub-Components/SideDrawer";
 import MyChats from "../components/MyChats";
 import ChatBox from "../components/ChatBox";
 
+// 32-bit integer limit for setTimeout (~24.8 days)
+const MAX_TIMEOUT_MS = 2147483647;
+
 const Chats = () => {
   const { user, setUser } = chatState();
   const [fetchAgain, setFetchAgain] = useState(false);
@@ -34,20 +37,29 @@ const Chats = () => {
     try {
       const decoded = jwtDecode(user.token);
       const currentTime = Date.now() / 1000;
-      const timeLeftInMs = (decoded.exp - currentTime) * 1000;
 
-      if (timeLeftInMs <= 0) {
+      // Check if already expired
+      if (decoded.exp && decoded.exp <= currentTime) {
         handleLogout();
         return;
       }
 
-      // Automatically trigger logout only when token expires
-      const timer = setTimeout(() => {
-        handleLogout();
-      }, timeLeftInMs);
+      // Safe timeout (cap at 24.8 days to prevent 32-bit integer overflow)
+      if (decoded.exp) {
+        const timeLeftInMs = (decoded.exp - currentTime) * 1000;
+        const safeDelay = Math.min(timeLeftInMs, MAX_TIMEOUT_MS);
 
-      return () => clearTimeout(timer);
-    } catch {
+        const timer = setTimeout(() => {
+          // Re-check when the timer fires
+          if ((decoded.exp - Date.now() / 1000) <= 0) {
+            handleLogout();
+          }
+        }, safeDelay);
+
+        return () => clearTimeout(timer);
+      }
+    } catch (error) {
+      console.error("Invalid token format:", error);
       handleLogout();
     }
   }, [user, handleLogout]);

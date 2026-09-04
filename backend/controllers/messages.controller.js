@@ -2,45 +2,59 @@ const { Chat } = require("../models/chats.models");
 const { Message } = require("../models/message.model");
 const { User } = require("../models/user.model");
 
-const sendMessage = async (req, res, next) => {
-  const { content, chatId } = req.body;
+// ... (keep sendMessage and allMessages)
 
-  if (!content || !chatId) {
-    return res.status(400).json({ message: "Content and chatId are required" });
+const editMessage = async (req, res, next) => {
+  const { messageId } = req.params;
+  const { content } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ message: "Message content cannot be empty" });
   }
 
   try {
-    let message = await Message.create({
-      sender: req.user._id,
-      content,
-      chat: chatId,
-    });
+    const message = await Message.findById(messageId);
 
-    message = await message.populate("sender", "name pic");
-    message = await message.populate("chat");
-    message = await User.populate(message, {
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // 1. Check if the requester is the sender
+    if (message.sender.toString() !== req.user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "You can only edit your own messages" });
+    }
+
+    // 2. Check if within 15-minute window (15 * 60 * 1000 ms)
+    const FIFTEEN_MINUTES = 15 * 60 * 1000;
+    const messageAge = Date.now() - new Date(message.createdAt).getTime();
+
+    if (messageAge > FIFTEEN_MINUTES) {
+      return res.status(400).json({
+        message:
+          "Editing window expired. Messages can only be edited within 15 minutes of sending.",
+      });
+    }
+
+    // 3. Update message
+    message.content = content.trim();
+    message.isEdited = true;
+    await message.save();
+
+    let updatedMessage = await Message.findById(messageId)
+      .populate("sender", "name pic email")
+      .populate("chat");
+
+    updatedMessage = await User.populate(updatedMessage, {
       path: "chat.users",
       select: "name pic email",
     });
 
-    await Chat.findByIdAndUpdate(chatId, { latestMessage: message });
-
-    res.status(201).json(message);
+    res.status(200).json(updatedMessage);
   } catch (error) {
     next(error);
   }
 };
 
-const allMessages = async (req, res, next) => {
-  try {
-    const messages = await Message.find({ chat: req.params.chatId })
-      .populate("sender", "name pic email")
-      .populate("chat");
-
-    res.status(200).json(messages);
-  } catch (error) {
-    next(error);
-  }
-};
-
-module.exports = { sendMessage, allMessages };
+module.exports = { sendMessage, allMessages, editMessage };

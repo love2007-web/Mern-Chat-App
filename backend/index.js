@@ -80,6 +80,17 @@ mongoose
     io.on("connection", (socket) => {
       console.log(`Socket connected: ${socket.id}`);
 
+      // Real-time message edit dispatch
+      socket.on("edit message", (updatedMessage) => {
+        const chat = updatedMessage?.chat;
+        if (!chat?.users) return;
+
+        chat.users.forEach((user) => {
+          if (user._id === updatedMessage.sender?._id) return;
+          socket.in(user._id).emit("message updated", updatedMessage);
+        });
+      });
+
       // Setup user room
       socket.on("setup", (userData) => {
         if (!userData?._id) return;

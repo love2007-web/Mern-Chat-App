@@ -34,7 +34,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const { selectedChat, setSelectedChat, user, notification, setNotification } =
     chatState();
 
-  // 1. Initialize Socket Connection once
+  // Socket Connection Setup
   useEffect(() => {
     if (!user) return;
 
@@ -45,13 +45,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     socketRef.current.on("stop typing", () => setIsTyping(false));
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      socketRef.current?.disconnect();
     };
   }, [user]);
 
-  // 2. Fetch Messages for Active Chat
+  // Fetch Messages
   const fetchMessages = useCallback(async () => {
     if (!selectedChat?._id || !user?.token) return;
 
@@ -85,7 +83,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     selectedChatCompareRef.current = selectedChat;
   }, [selectedChat, fetchMessages]);
 
-  // 3. Socket Message Listener (with proper cleanup!)
+  // Socket Listeners (Receiving & Editing messages)
   useEffect(() => {
     if (!socketRef.current) return;
 
@@ -94,7 +92,6 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         !selectedChatCompareRef.current ||
         selectedChatCompareRef.current._id !== newMessageReceived.chat._id
       ) {
-        // Notification logic
         setNotification((prev) => {
           if (!prev.some((n) => n._id === newMessageReceived._id)) {
             return [newMessageReceived, ...prev];
@@ -107,14 +104,25 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
       }
     };
 
+    // Real-time update when another user edits a message
+    const handleMessageUpdated = (updatedMessage) => {
+      if (selectedChatCompareRef.current?._id === updatedMessage.chat._id) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === updatedMessage._id ? updatedMessage : m)),
+        );
+      }
+    };
+
     socketRef.current.on("message recieved", handleMessageReceived);
+    socketRef.current.on("message updated", handleMessageUpdated);
 
     return () => {
       socketRef.current?.off("message recieved", handleMessageReceived);
+      socketRef.current?.off("message updated", handleMessageUpdated);
     };
   }, [setFetchAgain, setNotification]);
 
-  // 4. Send Message
+  // Send Message
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedChat?._id) return;
 
@@ -150,11 +158,49 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         isClosable: true,
         position: "bottom",
       });
-      setNewMessage(messageContent); // Restore on error
+      setNewMessage(messageContent);
     }
   };
 
-  // 5. Typing Indicator Handler
+  // Edit Message Handler (called from ScrollableChat)
+  const handleSaveEdit = async (messageId, updatedContent) => {
+    try {
+      const config = {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+      };
+
+      const { data } = await api.put(
+        `/message/${messageId}`,
+        { content: updatedContent },
+        config,
+      );
+
+      // 1. Update local state
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? data : m)));
+
+      // 2. Broadcast edit via socket
+      socketRef.current?.emit("edit message", data);
+
+      toast({
+        title: "Message updated",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to edit message",
+        description: error.response?.data?.message || "Error occurred",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   const typingHandler = (e) => {
     setNewMessage(e.target.value);
     if (!socketConnected) return;
@@ -228,7 +274,10 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
               />
             ) : (
               <div className="flex flex-col overflow-y-auto">
-                <ScrollableChat messages={messages} />
+                <ScrollableChat
+                  messages={messages}
+                  onSaveEdit={handleSaveEdit}
+                />
               </div>
             )}
 

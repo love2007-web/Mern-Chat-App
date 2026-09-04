@@ -14,10 +14,14 @@ const messageModel = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Chat",
     },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Message = mongoose.model("Message", messageModel);
