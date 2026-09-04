@@ -1,12 +1,7 @@
 const jwt = require("jsonwebtoken");
-const {User} = require("../models/user.model");
-
+const { User } = require("../models/user.model");
 
 const protect = async (req, res, next) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "*"
-  );
   let token;
 
   if (
@@ -15,23 +10,28 @@ const protect = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(" ")[1];
-
-      //decodes token id
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const email = decoded.email;
-      req.user = await User.findOne({email}).select("-password");
+
+      // Support lookup by decoded.id or legacy decoded.email
+      const query = decoded.id ? { _id: decoded.id } : { email: decoded.email };
+      req.user = await User.findOne(query).select("-password");
+
+      if (!req.user) {
+        return res
+          .status(401)
+          .json({ message: "User not found with this token" });
+      }
 
       next();
     } catch (error) {
-        console.log(error);
-      res.status(401);
-      throw new Error("Not authorized, token failed");
+      return res
+        .status(401)
+        .json({ message: "Not authorized, token invalid or expired" });
     }
-  }
-
-  if (!token) {
-    res.status(401);
-    throw new Error("Not authorized, no token");
+  } else {
+    return res
+      .status(401)
+      .json({ message: "Not authorized, no token provided" });
   }
 };
 

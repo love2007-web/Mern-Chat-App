@@ -145,7 +145,7 @@ const Login = () => {
           {/* Submit Button */}
           <Button
             type="submit"
-            colorScheme="teal"
+            colorScheme="orange"
             width="100%"
             mt={2}
             isLoading={isLoading}

@@ -1,37 +1,13 @@
-const jsonwebtoken = require("jsonwebtoken");
-const env = require("dotenv");
-env.config();
-const secret = process.env.JWT_SECRET;
+const jwt = require("jsonwebtoken");
 
-const generateToken = (email) => {
-  try {
-    let token = jsonwebtoken.sign({ email }, secret, { expiresIn: "30d" });
-    return token;
-  } catch (error) {
-    console.log(error);
-    throw {
-      name: "AuthenticationError",
-      message: "Error generating token",
-      error: error,
-    };
-  }
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "30d",
+  });
 };
 
 const verifyToken = (token) => {
-  try {
-    if (!token) throw { name: "AuthenticationError", message: "Invalid Token" };
-    const decoded = jsonwebtoken.sign(token, secret);
-    console.log(decoded);
-    let email = decoded.email;
-    return email;
-  } catch (error) {
-    console.log(error);
-    throw {
-      name: "AuthenticationError",
-      message: `Error verifying token`,
-      error: error,
-    };
-  }
+  return jwt.verify(token, process.env.JWT_SECRET);
 };
 
 module.exports = { generateToken, verifyToken };
